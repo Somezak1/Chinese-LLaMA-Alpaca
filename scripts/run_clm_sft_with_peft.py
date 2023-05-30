@@ -64,8 +64,9 @@ DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-# check_min_version("4.28.0.dev0")
+check_min_version("4.28.0.dev0")
 
+# Perform a runtime check of the dependency versions, using the exact same syntax used by pip.
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
 
 
@@ -205,22 +206,48 @@ def main():
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     send_example_telemetry("run_clm", model_args, data_args)
+    # def send_example_telemetry(example_name, *example_args, framework="pytorch"):
+    #     """
+    #     Sends telemetry that helps tracking the examples use.
+    #
+    #     Args:
+    #         example_name (`str`): The name of the example.
+    #         *example_args (dataclasses or `argparse.ArgumentParser`): The arguments to the script.
+    #             This function will only try to extract the model and dataset name from those. Nothing else is tracked
+    #         framework (`str`, *optional*, defaults to `"pytorch"`): The framework for the example.
+    #     """
 
     # Setup logging
     logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,  # if training_args.local_rank in [-1, 0] else logging.WARN,
         handlers=[logging.StreamHandler(sys.stdout)],)
 
-
-    if training_args.should_log:
+    # training_args.should_log: True
+    if training_args.should_log:  # Whether or not the current process should produce log.
         # The default of training_args.log_level is passive, so we set log level at info here to have that default.
         transformers.utils.logging.set_verbosity_info()
 
-    log_level = training_args.get_process_log_level()
+    log_level = training_args.get_process_log_level()  # log_level: 20
+    # get_process_log_level():
+    """
+    Returns the log level to be used depending on whether this process is the main process of node 0, main process
+    of node non-0, or a non-main process.
+
+    For the main process the log level defaults to the logging level set (`logging.WARNING` if you didn't do
+    anything) unless overridden by `log_level` argument.
+
+    For the replica processes the log level defaults to `logging.WARNING` unless overridden by `log_level_replica`
+    argument.
+
+    The choice between the main and replica process settings is made according to the return value of `should_log`.
+    """
     logger.setLevel(log_level)
     datasets.utils.logging.set_verbosity(log_level)
+    # Set the verbosity level for the 🤗 Transformers's root logger.
     transformers.utils.logging.set_verbosity(log_level)
+    # Enable the default handler of the HuggingFace Transformers's root logger.
     transformers.utils.logging.enable_default_handler()
+    # Enable explicit formatting for every HuggingFace Transformers's logger.
     transformers.utils.logging.enable_explicit_format()
     # transformers.tokenization_utils.logging.set_verbosity_warning()
 
@@ -232,6 +259,10 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
+    # training_args.output_dir: 'output'. The output directory where model predictions and checkpoints will be written.
+    # training_args.do_train: True. Whether to run training.
+    # training_args.overwrite_output_dir: True. If `True`, overwrite the content of the output directory.
+    # Use this to continue training if `output_dir` points to a checkpoint directory.
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
@@ -246,17 +277,19 @@ def main():
             )
 
     # Set seed before initializing model.
+    # Helper function for reproducible behavior to set seed in `random`, `numpy`, `torch` and/or `tf` (if installed).
     set_seed(training_args.seed)
 
 
     config_kwargs = {
-        "cache_dir": model_args.cache_dir,
-        "revision": model_args.model_revision,
-        "use_auth_token": True if model_args.use_auth_token else None,
+        "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
+        "revision": model_args.model_revision,  # model_args.model_revision: 'main'
+        "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
     }
-    if model_args.config_name:
+    if model_args.config_name:  # model_args.config_name: None
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
+        # model_args.model_name_or_path: '/data/model_weights/chinese-llama-plus-7b-official'
         config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
@@ -267,14 +300,15 @@ def main():
             logger.info(f"New config: {config}")
 
     tokenizer_kwargs = {
-        "cache_dir": model_args.cache_dir,
-        "use_fast": model_args.use_fast_tokenizer,
-        "revision": model_args.model_revision,
-        "use_auth_token": True if model_args.use_auth_token else None,
+        "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
+        "use_fast": model_args.use_fast_tokenizer,  # model_args.use_fast_tokenizer: True
+        "revision": model_args.model_revision,  # model_args.model_revision: 'main'
+        "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
     }
-    if model_args.tokenizer_name:
+    if model_args.tokenizer_name:  # model_args.tokenizer_name: None
         tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
     elif model_args.tokenizer_name_or_path:
+        # model_args.tokenizer_name_or_path: '/data/model_weights/chinese-llama-plus-7b-official'
         tokenizer = LlamaTokenizer.from_pretrained(model_args.tokenizer_name_or_path, **tokenizer_kwargs)
     else:
         raise ValueError(
@@ -282,8 +316,8 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    if tokenizer.pad_token is None:
-        num_new_tokens = smart_tokenizer_and_embedding_resize(
+    if tokenizer.pad_token is None:  # tokenizer.pad_token: None
+        num_new_tokens = smart_tokenizer_and_embedding_resize(  # num_new_tokens: 1
             special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
             tokenizer=tokenizer,
             model=None,)
@@ -293,23 +327,45 @@ def main():
     train_dataset = None
 
 
-    if training_args.do_train:
+    if training_args.do_train:  # training_args.do_train: True
         with training_args.main_process_first(desc="loading and tokenization"):
-            path = Path(data_args.dataset_dir)
+            # def main_process_first(self, local=True, desc="work"):
+            #     """
+            #     A context manager for torch distributed environment where on needs to do something on the main process,
+            #     while blocking replicas, and when it's finished releasing the replicas.
+            #
+            #     One such use is for `datasets`'s `map` feature which to be efficient should be run once on the main
+            #     process, which upon completion saves a cached version of results and which then automatically gets
+            #     loaded by the replicas.
+            #
+            #     Args:
+            #         local (`bool`, *optional*, defaults to `True`):
+            #             if `True` first means process of rank 0 of each node if `False` first means process of rank 0
+            #             of node rank 0 In multi-node environment with a shared filesystem you most likely will want
+            #             to use `local=False` so that only the main process of the first node will do the processing.
+            #             If however, the filesystem is not shared, then the main process of each node will need to do
+            #             the processing, which is the default behavior.
+            #         desc (`str`, *optional*, defaults to `"work"`):
+            #             a work description to be used in debug logs
+            #
+            #     """
+
+            path = Path(data_args.dataset_dir)  # data_args.dataset_dir: '../data'
             files = [os.path.join(path,file.name) for file in path.glob("*.json")]
+            # files: ['../data/alpaca_data_zh_51k.json']
             logger.info(f"training files: {' '.join(files)}")
             train_dataset = buid_instruction_dataset(
                 data_path=files, 
                 tokenizer=tokenizer, 
-                max_seq_length=data_args.max_seq_length,
+                max_seq_length=data_args.max_seq_length,  # data_args.max_seq_length: 512
                 data_cache_dir = None, 
-                preprocessing_num_workers = data_args.preprocessing_num_workers)
+                preprocessing_num_workers = data_args.preprocessing_num_workers)  # preprocessing_num_workers: 8
         logger.info(f"Num train_samples  {len(train_dataset)}")
         logger.info("training example:")
         logger.info(tokenizer.decode(train_dataset[0]['input_ids']))
-    if training_args.do_eval:
+    if training_args.do_eval:  # training_args.do_eval: True
         with training_args.main_process_first(desc="loading and tokenization"):
-            files = [data_args.validation_file]
+            files = [data_args.validation_file]  # ['../alpaca_data.json']
             logger.info(f"training files: {' '.join(files)}")
             eval_dataset = buid_instruction_dataset(
                 data_path=files, 
@@ -327,14 +383,14 @@ def main():
             model_args.torch_dtype
             if model_args.torch_dtype in ["auto", None]
             else getattr(torch, model_args.torch_dtype)
-        )
+        )  # torch_dtype: torch.float16
         model = LlamaForCausalLM.from_pretrained(
             model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),  # False
             config=config,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
+            cache_dir=model_args.cache_dir,  # model_args.cache_dir: None
+            revision=model_args.model_revision,  # model_args.model_revision: 'main'
+            use_auth_token=True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
             torch_dtype=torch_dtype,
             low_cpu_mem_usage=True
         )
@@ -344,8 +400,8 @@ def main():
         n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
         logger.info(f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
 
-    logger.info(f"len(tokenizer):{len(tokenizer)}")
-    embedding_size = model.get_input_embeddings().weight.shape[0]
+    logger.info(f"len(tokenizer):{len(tokenizer)}")  # len(tokenizer): 49954
+    embedding_size = model.get_input_embeddings().weight.shape[0]  # embedding_size: 49953
     if len(tokenizer) != embedding_size:
         logger.info("resize the embedding size by the size of the tokenizer")
         model.resize_token_embeddings(len(tokenizer))
@@ -356,25 +412,28 @@ def main():
     else:
         logger.info("Init new peft model")
         target_modules = training_args.trainable.split(',')
-        modules_to_save = training_args.modules_to_save
+        # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
+        modules_to_save = training_args.modules_to_save  # modules_to_save:  'embed_tokens,lm_head'
         if modules_to_save is not None:
             modules_to_save = modules_to_save.split(',')
-        lora_rank = training_args.lora_rank
-        lora_dropout = training_args.lora_dropout
-        lora_alpha = training_args.lora_alpha
+        lora_rank = training_args.lora_rank  # lora_rank: 8
+        lora_dropout = training_args.lora_dropout  # lora_dropout: 0.05
+        lora_alpha = training_args.lora_alpha  # lora_alpha: 32.0
         logger.info(f"target_modules: {target_modules}")
         logger.info(f"lora_rank: {lora_rank}")
         peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM, 
+            task_type=TaskType.CAUSAL_LM,  # TaskType.CAUSAL_LM: <TaskType.CAUSAL_LM: 'CAUSAL_LM'>
             target_modules=target_modules,
+            # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
             inference_mode=False, 
             r=lora_rank, lora_alpha=lora_alpha, 
             lora_dropout=lora_dropout,
-            modules_to_save=modules_to_save)
+            modules_to_save=modules_to_save)  # modules_to_save: ['embed_tokens', 'lm_head']
         model = get_peft_model(model, peft_config)
 
     #model.base_model.tie_weights()
     model.print_trainable_parameters()
+    # trainable params: 429211648 || all params: 6905483264 || trainable%: 6.215519342977586
     logger.info(f"model.modules_to_save: {model.modules_to_save}")
     old_state_dict = model.state_dict
     model.state_dict = (
