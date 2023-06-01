@@ -55,6 +55,47 @@ from transformers.utils.versions import require_version
 from peft import LoraConfig, TaskType, get_peft_model, PeftModel, get_peft_model_state_dict
 
 
+# 调试此程序所有的指令
+# torchrun --nnodes 1 --nproc_per_node 1 run_clm_sft_with_peft.py
+#     --deepspeed ds_zero2_no_offload.json
+#     --model_name_or_path /data/model_weights/chinese-llama-plus-7b-official
+#     --tokenizer_name_or_path /data/model_weights/chinese-llama-plus-7b-official
+#     --dataset_dir ../data
+#     --validation_split_percentage 0.001
+#     --per_device_train_batch_size 2
+#     --per_device_eval_batch_size 2
+#     --do_train
+#     --do_eval
+#     --seed 14
+#     --fp16
+#     --max_steps 100
+#     --lr_scheduler_type cosine
+#     --learning_rate 1e-4
+#     --warmup_ratio 0.03
+#     --weight_decay 0
+#     --logging_strategy steps
+#     --logging_steps 10
+#     --save_strategy steps
+#     --save_total_limit 3
+#     --evaluation_strategy steps
+#     --eval_steps 250
+#     --save_steps 500
+#     --gradient_accumulation_steps 1
+#     --preprocessing_num_workers 8
+#     --max_seq_length 512
+#     --output_dir output
+#     --overwrite_output_dir
+#     --ddp_timeout 30000
+#     --logging_first_step True
+#     --lora_rank 8
+#     --lora_alpha 32
+#     --trainable "q_proj,v_proj,k_proj,o_proj,gate_proj,down_proj,up_proj"
+#     --modules_to_save "embed_tokens,lm_head"
+#     --lora_dropout 0.05
+#     --torch_dtype float16
+# 	--validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json
+#     --gradient_checkpointing
+#     --ddp_find_unused_parameters False
 
 
 IGNORE_INDEX = -100
@@ -227,7 +268,7 @@ def main():
         # The default of training_args.log_level is passive, so we set log level at info here to have that default.
         transformers.utils.logging.set_verbosity_info()
 
-    log_level = training_args.get_process_log_level()  # log_level: 20
+    log_level = training_args.get_process_log_level()  # log_level: 20, INFO
     # get_process_log_level():
     """
     Returns the log level to be used depending on whether this process is the main process of node 0, main process
@@ -285,7 +326,7 @@ def main():
         "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
         "revision": model_args.model_revision,  # model_args.model_revision: 'main'
         "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
-    }
+    }  # config_kwargs: key/value pairs with which to update the configuration object after loading
     if model_args.config_name:  # model_args.config_name: None
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
@@ -301,7 +342,7 @@ def main():
 
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
-        "use_fast": model_args.use_fast_tokenizer,  # model_args.use_fast_tokenizer: True
+        "use_fast": model_args.use_fast_tokenizer,  # model_args.use_fast_tokenizer: True, # Indicate if transformers should try to load the fast version of the tokenizer (True) or use the Python one (False).
         "revision": model_args.model_revision,  # model_args.model_revision: 'main'
         "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
     }
@@ -318,7 +359,7 @@ def main():
 
     if tokenizer.pad_token is None:  # tokenizer.pad_token: None
         num_new_tokens = smart_tokenizer_and_embedding_resize(  # num_new_tokens: 1
-            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
+            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),  # DEFAULT_PAD_TOKEN: "[PAD]"
             tokenizer=tokenizer,
             model=None,)
 
@@ -360,6 +401,14 @@ def main():
                 max_seq_length=data_args.max_seq_length,  # data_args.max_seq_length: 512
                 data_cache_dir = None, 
                 preprocessing_num_workers = data_args.preprocessing_num_workers)  # preprocessing_num_workers: 8
+            # Dataset({
+            #     features: ['input_ids', 'labels'],
+            #     num_rows: 51179
+            # })
+
+            # input_ids是将prompt、input、output的input_ids拼接在一起, 之后取前512个字符
+            # labels是将prompt、input部分的input_ids全部变为-100, 其余部分同input_ids
+
         logger.info(f"Num train_samples  {len(train_dataset)}")
         logger.info("training example:")
         logger.info(tokenizer.decode(train_dataset[0]['input_ids']))
@@ -405,8 +454,11 @@ def main():
     if len(tokenizer) != embedding_size:
         logger.info("resize the embedding size by the size of the tokenizer")
         model.resize_token_embeddings(len(tokenizer))
+        # Resizes input token embeddings matrix of the model if `new_num_tokens != config.vocab_size`.
+        # Increasing the size will add newly initialized vectors at the end.
+        # Reducing the size will remove vectors from the end.
 
-    if training_args.peft_path is not None:
+    if training_args.peft_path is not None:  # training_args.peft_path: None
         logger.info("Peft from pre-trained model")
         model = PeftModel.from_pretrained(model, training_args.peft_path)
     else:
@@ -429,7 +481,31 @@ def main():
             r=lora_rank, lora_alpha=lora_alpha, 
             lora_dropout=lora_dropout,
             modules_to_save=modules_to_save)  # modules_to_save: ['embed_tokens', 'lm_head']
+        # class LoraConfig(PeftConfig):
+        #     """
+        #     This is the configuration class to store the configuration of a [`LoraModel`].
+        #
+        #     Args:
+        #         r (`int`): Lora attention dimension.
+        #         target_modules (`Union[List[str],str]`): The names of the modules to apply Lora to.
+        #         lora_alpha (`float`): The alpha parameter for Lora scaling.
+        #         lora_dropout (`float`): The dropout probability for Lora layers.
+        #         fan_in_fan_out (`bool`): Set this to True if the layer to replace stores weight like (fan_in, fan_out).
+        #         For example, gpt-2 uses `Conv1D` which stores weights like (fan_in, fan_out) and hence this should be set to `True`.:
+        #         bias (`str`): Bias type for Lora. Can be 'none', 'all' or 'lora_only'
+        #         modules_to_save (`List[str]`): List of modules apart from LoRA layers to be set as trainable
+        #             and saved in the final checkpoint.
+        #     """
+
         model = get_peft_model(model, peft_config)
+        # def get_peft_model(model, peft_config):
+        #     """
+        #     Returns a Peft model object from a model and a config.
+        #
+        #     Args:
+        #         model ([`transformers.PreTrainedModel`]): Model to be wrapped.
+        #         peft_config ([`PeftConfig`]): Configuration object containing the parameters of the Peft model.
+        #     """
 
     #model.base_model.tie_weights()
     model.print_trainable_parameters()
@@ -439,7 +515,16 @@ def main():
     model.state_dict = (
         lambda self, *_, **__: get_peft_model_state_dict(self, old_state_dict())
     ).__get__(model, type(model))
-
+    # def get_peft_model_state_dict(model, state_dict=None, adapter_name="default"):
+    #     """
+    #     Get the state dict of the Peft model.
+    #
+    #     Args:
+    #         model ([`PeftModel`]): The Peft model. When using torch.nn.DistributedDataParallel, DeepSpeed or FSDP,
+    #         the model should be the underlying model/unwrapped model (i.e. model.module).
+    #         state_dict (`dict`, *optional*, defaults to `None`):
+    #             The state dict of the model. If not provided, the state dict of the model will be used.
+    #     """
 
     # Initialize our Trainer
     trainer = Trainer(
@@ -454,11 +539,192 @@ def main():
     # Training
     if training_args.do_train:
         checkpoint = None
-        if training_args.resume_from_checkpoint is not None:
+        if training_args.resume_from_checkpoint is not None:  # training_args.resume_from_checkpoint: None
             checkpoint = training_args.resume_from_checkpoint
-        elif last_checkpoint is not None:
+        elif last_checkpoint is not None:  # last_checkpoint: None
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
+
+        # class LlamaForCausalLM(LlamaPreTrainedModel):
+        #     def __init__(self, config):
+        #         super().__init__(config)
+        #         self.model = LlamaModel(config)
+        #
+        #         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        #
+        #         # Initialize weights and apply final processing
+        #         self.post_init()
+        #
+        #    ......
+        #
+        #     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
+        #     @replace_return_docstrings(output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
+        #     def forward(
+        #         self,
+        #         input_ids: torch.LongTensor = None,
+        #         attention_mask: Optional[torch.Tensor] = None,
+        #         position_ids: Optional[torch.LongTensor] = None,
+        #         past_key_values: Optional[List[torch.FloatTensor]] = None,
+        #         inputs_embeds: Optional[torch.FloatTensor] = None,
+        #         labels: Optional[torch.LongTensor] = None,
+        #         use_cache: Optional[bool] = None,
+        #         output_attentions: Optional[bool] = None,
+        #         output_hidden_states: Optional[bool] = None,
+        #         return_dict: Optional[bool] = None,
+        #     ) -> Union[Tuple, CausalLMOutputWithPast]:
+        #         r"""
+        #         Args:
+        #             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+        #                 Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
+        #                 config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
+        #                 (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
+        #
+        #         Returns:
+        #
+        #         Example:
+        #
+        #         ```python
+        #         >>> from transformers import AutoTokenizer, LlamaForCausalLM
+        #
+        #         >>> model = LlamaForCausalLM.from_pretrained(PATH_TO_CONVERTED_WEIGHTS)
+        #         >>> tokenizer = AutoTokenizer.from_pretrained(PATH_TO_CONVERTED_TOKENIZER)
+        #
+        #         >>> prompt = "Hey, are you consciours? Can you talk to me?"
+        #         >>> inputs = tokenizer(prompt, return_tensors="pt")
+        #
+        #         >>> # Generate
+        #         >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
+        #         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        #         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
+        #         ```"""
+        #
+        #         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        #         output_hidden_states = (
+        #             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        #         )
+        #         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        #
+        #         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+        #         outputs = self.model(
+        #             input_ids=input_ids,
+        #             attention_mask=attention_mask,
+        #             position_ids=position_ids,
+        #             past_key_values=past_key_values,
+        #             inputs_embeds=inputs_embeds,
+        #             use_cache=use_cache,
+        #             output_attentions=output_attentions,
+        #             output_hidden_states=output_hidden_states,
+        #             return_dict=return_dict,
+        #         )
+        #
+        #         hidden_states = outputs[0]
+        #         logits = self.lm_head(hidden_states)
+        #
+        #         loss = None
+        #         if labels is not None:
+        #             # Shift so that tokens < n predict n
+        #             shift_logits = logits[..., :-1, :].contiguous()
+        #             shift_labels = labels[..., 1:].contiguous()
+        #             # Flatten the tokens
+        #             loss_fct = CrossEntropyLoss()
+        #             shift_logits = shift_logits.view(-1, self.config.vocab_size)
+        #             shift_labels = shift_labels.view(-1)
+        #             # Enable model parallelism
+        #             shift_labels = shift_labels.to(shift_logits.device)
+        #             loss = loss_fct(shift_logits, shift_labels)
+        #
+        #         if not return_dict:
+        #             output = (logits,) + outputs[1:]
+        #             return (loss,) + output if loss is not None else output
+        #
+        #         return CausalLMOutputWithPast(
+        #             loss=loss,
+        #             logits=logits,
+        #             past_key_values=outputs.past_key_values,
+        #             hidden_states=outputs.hidden_states,
+        #             attentions=outputs.attentions,
+        #         )
+
+        # batch_size=2
+        # 训练的第一个step, 其inputs由2个样本的input_ids, labels, attention_mask组成, 三个元素的形状都为(2, 97)
+        # inputs['attention_mask']:
+        # tensor([[ True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True, False, False, False, False, False,
+        #          False, False, False, False, False, False, False, False, False, False,
+        #          False, False, False, False, False, False, False, False, False, False,
+        #          False, False, False, False, False, False, False],
+        #         [ True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True,  True,  True,  True,
+        #           True,  True,  True,  True,  True,  True,  True]])
+        # inputs['labels']:
+        # tensor([[ -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100, 29871, 40722, 31305, 30210, 32719, 30573,
+        #          32029, 42062, 34201, 30267,     2,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100],
+        #         [ -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,  -100,
+        #           -100,  -100,  -100,  -100,  -100, 29871, 30392, 30210, 30214, 29954,
+        #           7982, 35894, 35587, 37145, 36977, 34886, 38547, 34886, 36977, 32204,
+        #          37559, 30267, 32269, 32039, 44049, 36977, 32326, 30893, 32019, 32968,
+        #          30210, 38547, 32333, 30210, 30267, 32070, 38547, 30785, 29954,  7982,
+        #          35894, 35587, 32244, 34886, 36977, 32204, 36444, 33690, 30214, 30847,
+        #          33155, 30214, 32772, 31391, 32417, 30267,     2]])
+        # inputs['input_ids']:
+        # tensor([[    1, 13866,   338,   385, 15278,   393, 16612,   263,  3414, 29889,
+        #          14350,   263,  2933,   393,  7128,  2486,  1614,  2167,   278,  2009,
+        #          29889,    13,    13,  2277, 29937,  2799,  4080, 29901,    13, 33347,
+        #          31999, 30495, 37121, 30503, 43423, 30210, 40722, 31305, 30210, 32719,
+        #          30267,    13, 29941, 34201, 30503, 29946, 34201,    13,    13,  2277,
+        #          29937, 13291, 29901, 29871, 29871, 40722, 31305, 30210, 32719, 30573,
+        #          32029, 42062, 34201, 30267,     2, 49953, 49953, 49953, 49953, 49953,
+        #          49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953,
+        #          49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953, 49953,
+        #          49953, 49953, 49953, 49953, 49953, 49953, 49953],
+        #         [    1, 13866,   338,   385, 15278,   393, 16612,   263,  3414, 29889,
+        #          14350,   263,  2933,   393,  7128,  2486,  1614,  2167,   278,  2009,
+        #          29889,    13,    13,  2277, 29937,  2799,  4080, 29901,    13, 29954,
+        #           7982, 35894, 35587, 30815, 34886, 37559, 32027, 30882,    13,    13,
+        #           2277, 29937, 13291, 29901, 29871, 29871, 30392, 30210, 30214, 29954,
+        #           7982, 35894, 35587, 37145, 36977, 34886, 38547, 34886, 36977, 32204,
+        #          37559, 30267, 32269, 32039, 44049, 36977, 32326, 30893, 32019, 32968,
+        #          30210, 38547, 32333, 30210, 30267, 32070, 38547, 30785, 29954,  7982,
+        #          35894, 35587, 32244, 34886, 36977, 32204, 36444, 33690, 30214, 30847,
+        #          33155, 30214, 32772, 31391, 32417, 30267,     2]])
+
+        # tokenizer.decode(inputs['input_ids'][0]):
+        # '<s> Below is an instruction that describes a task. Write a response that appropriately completes the
+        # request.\n\n### Instruction:\n计算给定长度和宽度的矩形的面积。\n3厘米和4厘米\n\n### Response:  矩形的面积为12平
+        # 方厘米。</s> [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]
+        # [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]'
+
+        # tokenizer.decode(inputs['input_ids'][1]):
+        # '<s> Below is an instruction that describes a task. Write a response that appropriately completes the
+        # request.\n\n### Instruction:\nGPT-3模型能识别物体吗？\n\n### Response:  是的，GPT-3模型可以通过图像识别算法识
+        # 别图像中的物体。这是通过标记图像数据集进行训练的算法实现的。这些算法使GPT-3模型能够识别图像中的特定对象，如猫，狗或汽车。</s>'
+
+        # 训练的第二个step, 其inputs由2个样本的input_ids, labels, attention_mask组成, 三个元素的形状都为(2, 84)
+        # 可以看出, 由于collator的存在, 每个batch中的样本总是按当前batch中最长的那个样本长度来padding
+
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
@@ -488,14 +754,16 @@ def main():
 
 
 def smart_tokenizer_and_embedding_resize(
-    special_tokens_dict: Dict,
+    special_tokens_dict: Dict,  # {'pad_token': '[PAD]'}
     tokenizer: transformers.PreTrainedTokenizer,
-    model: transformers.PreTrainedModel,
+    model: transformers.PreTrainedModel,  # None
 ):
     """Resize tokenizer and embedding.
     Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
     """
+    # tokenizer.special_tokens: {'bos_token': '<s>', 'eos_token': '</s>', 'unk_token': '<unk>'}
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    # tokenizer.special_tokens: {'bos_token': '<s>', 'eos_token': '</s>', 'unk_token': '<unk>', 'pad_token': '[PAD]'}
     if model is not None:
         model.resize_token_embeddings(len(tokenizer))
 

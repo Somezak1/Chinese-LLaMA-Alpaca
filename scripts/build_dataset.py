@@ -72,6 +72,40 @@ def buid_instruction_dataset(data_path: Union[List[str],str],
             # datasets.load_from_disk: Loads a dataset that was previously saved using save_to_disk()
             # from a dataset directory, or from a filesystem using either S3FileSystem or any
             # implementation of fsspec.spec.AbstractFileSystem.
+            logger.info(f'training datasets-{file} has been loaded from disk')
+        except Exception:
+            raw_dataset = load_dataset("json", data_files=file, cache_dir=cache_path)
+            # raw_dataset:
+            # DatasetDict({
+            #     train: Dataset({
+            #         features: ['instruction', 'output', 'input'],
+            #         num_rows: 51179
+            #     })
+            # })
+
+            # raw_dataset中的某个数据:
+            #   'instruction': '编辑文章，使其更吸引读者。',
+            #   'input': '自主机器人是计算机控制的机器，被编程执行特定任务而不需要任何人类输入。
+            #             自主机器人在各个行业中被越来越广泛地应用，从制造业到医疗保健再到安全。'
+            #   'output': '自主机器人是计算机控制的机器，被编程执行特定任务而不需要任何人类输入，
+            #              从而实现了新的效率、精确度和可靠性水平。自主机器人在各个行业中被越来
+            #              越广泛地应用，从制造业，它们可以使用精度和一致的质量组装复杂的组件，
+            #              到医疗保健，可以协助进行医疗测试和处理，再到安全，可以监控大面积地区，
+            #              保障人们和财产的安全。自主机器人还可以减少在危险或有害环境中的错误和
+            #              增加安全，在工业流程的检查或维修期间等。由于其多样性，自主机器人将彻
+            #              底改变我们工作方式的方式，使任务变得更加简单、快速，最终更加愉悦。'
+
+            tokenization_func = tokenization
+            tokenized_dataset = raw_dataset.map(
+                tokenization_func,
+                batched=True,
+                num_proc=preprocessing_num_workers,
+                remove_columns=["instruction","input","output"],
+                keep_in_memory=False,
+                desc="preprocessing on dataset",
+            )
+            processed_dataset = tokenized_dataset
+            processed_dataset.save_to_disk(cache_path)  # Saves a dataset to a dataset directory
             # processed_dataset:
             # DatasetDict({
             #     train: Dataset({
@@ -79,30 +113,6 @@ def buid_instruction_dataset(data_path: Union[List[str],str],
             #         num_rows: 51179
             #     })
             # })
-            # processed_dataset['train'][0]['input_ids']: [1, 13866, 338, 385, ...]
-            # processed_dataset['train'][0]['labels']: [-100, -100, -100, -100, -100, ...]
-
-            # json文件中的某个数据:
-            # {
-            #   'instruction': '编辑文章，使其更吸引读者。',
-            #   'input': '自主机器人是计算机控制的机器，被编程执行特定任务而不需要任何人类输入。
-            #             自主机器人在各个行业中被越来越广泛地应用，从制造业到医疗保健再到安全。'
-            #   'output': '自主机器人是计算机控制的机器，被编程执行特定任务而不需要任何人类输入，从而实现了新的效率、
-            #              精确度和可靠性水平。自主机器人在各个行业中被越来越广泛地应用，从制造业，它们可以使用精度和一致的质量
-            #              组装复杂的组件，到医疗保健，可以协助进行医疗测试和处理，再到安全，可以监控大面积地区，保障人们和财产
-            #              的安全。自主机器人还可以减少在危险或有害环境中的错误和增加安全，在工业流程的检查或维修期间等。由于其
-            #              多样性，自主机器人将彻底改变我们工作方式的方式，使任务变得更加简单、快速，最终更加愉悦。'
-            # }
-
-            # tokenizer.convert_tokens_to_string(processed_dataset['train'][1]['input_ids']):
-            # 注意这里已经将instruction和input进行了拼接
-            # 'Below is an instruction that describes a task. Write a response that appropriately completes
-            # the request.\n\n### Instruction:\n编辑文章，使其更吸引读者。\n自主机器人是计算机控制的机器，被编程执行特
-            # 定任务而不需要任何人类输入。自主机器人在各个行业中被越来越广泛地应用，从制造业到医疗保健再到安全。\n\n### Response:  自
-            # 主机器人是计算机控制的机器，被编程执行特定任务而不需要任何人类输入，从而实现了新的效率、精确度和可靠性水平。自主机器
-            # 人在各个行业中被越来越广泛地应用，从制造业，它们可以使用精度和一致的质量组装复杂的组件，到医疗保健，可以协助进行医疗测试
-            # 和处理，再到安全，可以监控大面积地区，保障人们和财产的安全。自主机器人还可以减少在危险或有害环境中的错误和增加安全，在工
-            # 业流程的检查或维修期间等。由于其多样性，自主机器人将彻底改变我们工作方式的方式，使任务变得更加简单、快速，最终更加愉悦。'
 
             # tokens = tokenizer.convert_ids_to_tokens(processed_dataset['train'][1]['input_ids'])
             # for idx, (i, j) in enumerate(zip(tokens, processed_dataset['train'][1]['labels'])):
@@ -337,22 +347,10 @@ def buid_instruction_dataset(data_path: Union[List[str],str],
             # idx: 227   token: 愉悦   label: 46384
             # idx: 228   token: 。   label: 30267
             # idx: 229   token: </s>   label: 2
-            logger.info(f'training datasets-{file} has been loaded from disk')
-        except Exception:
-            raw_dataset = load_dataset("json", data_files=file, cache_dir=cache_path)
-            tokenization_func = tokenization
-            tokenized_dataset = raw_dataset.map(
-                tokenization_func,
-                batched=True,
-                num_proc=preprocessing_num_workers,
-                remove_columns=["instruction","input","output"],
-                keep_in_memory=False,
-                desc="preprocessing on dataset",
-            )
-            processed_dataset = tokenized_dataset
-            processed_dataset.save_to_disk(cache_path)
-        processed_dataset.set_format('torch')
+
+        processed_dataset.set_format('torch')  # 将input_ids和labels从List转化为torch.tensor
         all_datasets.append(processed_dataset['train'])
+    # Converts a list of Dataset with the same schema into a single Dataset
     all_datasets = concatenate_datasets(all_datasets)
     return all_datasets
 
