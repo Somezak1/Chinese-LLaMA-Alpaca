@@ -34,7 +34,7 @@ def buid_instruction_dataset(data_path: Union[List[str],str],
             if input is not None and input !="":
                 instruction = instruction+'\n'+input
             source = prompt.format_map({'instruction':instruction})
-            target = f"{output}{tokenizer.eos_token}"
+            target = f"{output}{tokenizer.eos_token}"  # tokenizer.eos_token: '</s>'
 
             sources.append(source)
             targets.append(target)
@@ -371,5 +371,5 @@ class DataCollatorForSupervisedDataset(object):
         return dict(
             input_ids=input_ids,
             labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),  # 'pad_token': '[PAD]'
         )

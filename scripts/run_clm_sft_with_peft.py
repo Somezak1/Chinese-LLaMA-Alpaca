@@ -356,12 +356,13 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-
+    # len(tokenizer): 49953
     if tokenizer.pad_token is None:  # tokenizer.pad_token: None
         num_new_tokens = smart_tokenizer_and_embedding_resize(  # num_new_tokens: 1
             special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),  # DEFAULT_PAD_TOKEN: "[PAD]"
             tokenizer=tokenizer,
             model=None,)
+    # len(tokenizer): 49954
 
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     eval_dataset=None
@@ -545,106 +546,6 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
-        # class LlamaForCausalLM(LlamaPreTrainedModel):
-        #     def __init__(self, config):
-        #         super().__init__(config)
-        #         self.model = LlamaModel(config)
-        #
-        #         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        #
-        #         # Initialize weights and apply final processing
-        #         self.post_init()
-        #
-        #    ......
-        #
-        #     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
-        #     @replace_return_docstrings(output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
-        #     def forward(
-        #         self,
-        #         input_ids: torch.LongTensor = None,
-        #         attention_mask: Optional[torch.Tensor] = None,
-        #         position_ids: Optional[torch.LongTensor] = None,
-        #         past_key_values: Optional[List[torch.FloatTensor]] = None,
-        #         inputs_embeds: Optional[torch.FloatTensor] = None,
-        #         labels: Optional[torch.LongTensor] = None,
-        #         use_cache: Optional[bool] = None,
-        #         output_attentions: Optional[bool] = None,
-        #         output_hidden_states: Optional[bool] = None,
-        #         return_dict: Optional[bool] = None,
-        #     ) -> Union[Tuple, CausalLMOutputWithPast]:
-        #         r"""
-        #         Args:
-        #             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-        #                 Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
-        #                 config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-        #                 (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-        #
-        #         Returns:
-        #
-        #         Example:
-        #
-        #         ```python
-        #         >>> from transformers import AutoTokenizer, LlamaForCausalLM
-        #
-        #         >>> model = LlamaForCausalLM.from_pretrained(PATH_TO_CONVERTED_WEIGHTS)
-        #         >>> tokenizer = AutoTokenizer.from_pretrained(PATH_TO_CONVERTED_TOKENIZER)
-        #
-        #         >>> prompt = "Hey, are you consciours? Can you talk to me?"
-        #         >>> inputs = tokenizer(prompt, return_tensors="pt")
-        #
-        #         >>> # Generate
-        #         >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
-        #         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        #         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
-        #         ```"""
-        #
-        #         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        #         output_hidden_states = (
-        #             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        #         )
-        #         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        #
-        #         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
-        #         outputs = self.model(
-        #             input_ids=input_ids,
-        #             attention_mask=attention_mask,
-        #             position_ids=position_ids,
-        #             past_key_values=past_key_values,
-        #             inputs_embeds=inputs_embeds,
-        #             use_cache=use_cache,
-        #             output_attentions=output_attentions,
-        #             output_hidden_states=output_hidden_states,
-        #             return_dict=return_dict,
-        #         )
-        #
-        #         hidden_states = outputs[0]
-        #         logits = self.lm_head(hidden_states)
-        #
-        #         loss = None
-        #         if labels is not None:
-        #             # Shift so that tokens < n predict n
-        #             shift_logits = logits[..., :-1, :].contiguous()
-        #             shift_labels = labels[..., 1:].contiguous()
-        #             # Flatten the tokens
-        #             loss_fct = CrossEntropyLoss()
-        #             shift_logits = shift_logits.view(-1, self.config.vocab_size)
-        #             shift_labels = shift_labels.view(-1)
-        #             # Enable model parallelism
-        #             shift_labels = shift_labels.to(shift_logits.device)
-        #             loss = loss_fct(shift_logits, shift_labels)
-        #
-        #         if not return_dict:
-        #             output = (logits,) + outputs[1:]
-        #             return (loss,) + output if loss is not None else output
-        #
-        #         return CausalLMOutputWithPast(
-        #             loss=loss,
-        #             logits=logits,
-        #             past_key_values=outputs.past_key_values,
-        #             hidden_states=outputs.hidden_states,
-        #             attentions=outputs.attentions,
-        #         )
-
         # batch_size=2
         # 训练的第一个step, 其inputs由2个样本的input_ids, labels, attention_mask组成, 三个元素的形状都为(2, 97)
         # inputs['attention_mask']:
@@ -724,6 +625,143 @@ def main():
 
         # 训练的第二个step, 其inputs由2个样本的input_ids, labels, attention_mask组成, 三个元素的形状都为(2, 84)
         # 可以看出, 由于collator的存在, 每个batch中的样本总是按当前batch中最长的那个样本长度来padding
+
+
+        # class LlamaForCausalLM(LlamaPreTrainedModel):
+        #     def __init__(self, config):
+        #         super().__init__(config)
+        #         self.model = LlamaModel(config)
+        #
+        #         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        #
+        #         # Initialize weights and apply final processing
+        #         self.post_init()
+        #
+        #    ......
+        #
+        #     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
+        #     @replace_return_docstrings(output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
+        #     def forward(
+        #         self,
+        #         input_ids: torch.LongTensor = None,
+        #         attention_mask: Optional[torch.Tensor] = None,
+        #         position_ids: Optional[torch.LongTensor] = None,
+        #         past_key_values: Optional[List[torch.FloatTensor]] = None,
+        #         inputs_embeds: Optional[torch.FloatTensor] = None,
+        #         labels: Optional[torch.LongTensor] = None,
+        #         use_cache: Optional[bool] = None,
+        #         output_attentions: Optional[bool] = None,
+        #         output_hidden_states: Optional[bool] = None,
+        #         return_dict: Optional[bool] = None,
+        #     ) -> Union[Tuple, CausalLMOutputWithPast]:
+        #         r"""
+        #         Args:
+        #             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+        #                 Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
+        #                 config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
+        #                 (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
+        #
+        #         Returns:
+        #
+        #         Example:
+        #
+        #         ```python
+        #         >>> from transformers import AutoTokenizer, LlamaForCausalLM
+        #
+        #         >>> model = LlamaForCausalLM.from_pretrained(PATH_TO_CONVERTED_WEIGHTS)
+        #         >>> tokenizer = AutoTokenizer.from_pretrained(PATH_TO_CONVERTED_TOKENIZER)
+        #
+        #         >>> prompt = "Hey, are you consciours? Can you talk to me?"
+        #         >>> inputs = tokenizer(prompt, return_tensors="pt")
+        #
+        #         >>> # Generate
+        #         >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
+        #         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        #         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
+        #         ```"""
+        #
+        #         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        #         output_hidden_states = (
+        #             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        #         )
+        #         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        #
+        #         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+        #         outputs = self.model(
+        #             input_ids=input_ids,  # 第一个step的size为(2, 97)
+        #             attention_mask=attention_mask,  # 第一个step的size为(2, 97)
+        #             position_ids=position_ids,  # None
+        #             past_key_values=past_key_values,  # None
+        #             inputs_embeds=inputs_embeds,  # None
+        #             use_cache=use_cache,  # None
+        #             output_attentions=output_attentions,  # False
+        #             output_hidden_states=output_hidden_states,  # False
+        #             return_dict=return_dict,  # True
+        #         )
+        #
+        #         hidden_states = outputs[0]  # hidden_states.size(): (2, 97, 4096)
+        #         logits = self.lm_head(hidden_states)  # logits.size(): (2, 97, 49954)
+        #
+        #         loss = None
+        #         if labels is not None:
+        #             # Shift so that tokens < n predict n
+        #             shift_logits = logits[..., :-1, :].contiguous()  # shift_logits.size(): (2, 96, 49954)
+        #             shift_labels = labels[..., 1:].contiguous()  # shift_labels.size(): (2, 96)
+        #             # Flatten the tokens
+        #             loss_fct = CrossEntropyLoss()
+        #             shift_logits = shift_logits.view(-1, self.config.vocab_size)  # shift_logits.size(): (192, 49954)
+        #             shift_labels = shift_labels.view(-1)  # shift_labels.size(): (192, )
+        #             # Enable model parallelism
+        #             shift_labels = shift_labels.to(shift_logits.device)
+        #             loss = loss_fct(shift_logits, shift_labels)  # labels中-100的地方损失为0
+        #
+        #         if not return_dict:
+        #             output = (logits,) + outputs[1:]
+        #             return (loss,) + output if loss is not None else output
+        #
+        #         return CausalLMOutputWithPast(
+        #             loss=loss,
+        #             logits=logits,
+        #             past_key_values=outputs.past_key_values,
+        #             hidden_states=outputs.hidden_states,
+        #             attentions=outputs.attentions,
+        #         )
+
+        # 上面如果CrossEntropyLoss()定义时reduce=False, 则对第一个step数据计算得到的loss.view(2, 97)得到如下损失矩阵
+        # tensor([[0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 3.4434e+00,
+        #          2.9238e+00, 1.2901e-02, 7.6855e-01, 2.3486e-01, 1.7949e+00, 5.7812e+00,
+        #          1.2822e+00, 6.5613e-02, 8.8770e-01, 1.2094e+01, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00],
+        #         [0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        #          0.0000e+00, 0.0000e+00, 5.5703e+00, 2.8789e+00, 1.1992e+00, 1.5488e+00,
+        #          1.6680e+00, 2.5406e-02, 3.9948e-02, 1.5654e+00, 6.5898e+00, 2.4414e+00,
+        #          4.7021e-01, 7.8086e+00, 9.1992e-01, 3.9629e+00, 6.0010e-01, 3.5547e-01,
+        #          2.3682e-01, 6.0547e+00, 3.7734e+00, 7.0859e+00, 2.0684e+00, 6.3672e+00,
+        #          3.8477e+00, 3.8633e+00, 1.3262e+00, 2.0488e+00, 3.6816e+00, 5.0781e+00,
+        #          4.4531e-01, 1.9812e-01, 5.6523e+00, 2.4805e+00, 6.2734e+00, 1.6045e+00,
+        #          2.5620e-02, 3.6041e-02, 1.4746e+00, 1.2236e+00, 1.7871e+00, 1.5029e+00,
+        #          2.1509e-01, 3.8438e+00, 2.4141e+00, 1.2256e+00, 2.1367e+00, 3.5195e+00,
+        #          1.9746e+00, 8.9893e-01, 3.6602e+00, 2.0605e+00, 4.4189e-01, 1.3930e+01]],
+        #        device='cuda:0', dtype=torch.float16, grad_fn= < ViewBackward0 >)
+
 
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
