@@ -410,11 +410,11 @@ def main():
             files = [os.path.join(path,file.name) for file in path.glob("*.json")]
             # files: ['../data/alpaca_data_zh_51k.json']
             logger.info(f"training files: {' '.join(files)}")
-            train_dataset = buid_instruction_dataset(
-                data_path=files, 
-                tokenizer=tokenizer, 
+            train_dataset = build_instruction_dataset(
+                data_path=files,
+                tokenizer=tokenizer,
                 max_seq_length=data_args.max_seq_length,  # data_args.max_seq_length: 512
-                data_cache_dir = None, 
+                data_cache_dir = None,
                 preprocessing_num_workers = data_args.preprocessing_num_workers)  # preprocessing_num_workers: 8
             # Dataset({
             #     features: ['input_ids', 'labels'],
@@ -431,8 +431,8 @@ def main():
         with training_args.main_process_first(desc="loading and tokenization"):
             files = [data_args.validation_file]  # ['../alpaca_data.json']
             logger.info(f"Evaluation files: {' '.join(files)}")
-            eval_dataset = buid_instruction_dataset(
-                data_path=files, 
+            eval_dataset = build_instruction_dataset(
+                data_path=files,
                 tokenizer=tokenizer,
                 max_seq_length=data_args.max_seq_length,
                 data_cache_dir = None,
@@ -490,7 +490,7 @@ def main():
             task_type=TaskType.CAUSAL_LM,  # TaskType.CAUSAL_LM: <TaskType.CAUSAL_LM: 'CAUSAL_LM'>
             target_modules=target_modules,
             # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
-            inference_mode=False, 
+            inference_mode=False,
             r=lora_rank, lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
             modules_to_save=modules_to_save)  # modules_to_save: ['embed_tokens', 'lm_head']
