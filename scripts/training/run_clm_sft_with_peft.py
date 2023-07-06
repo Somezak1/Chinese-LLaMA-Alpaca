@@ -22,21 +22,18 @@ https://huggingface.co/models?filter=text-generation
 # You can also adapt this script on your own causal language modeling task. Pointers for this are left as comments.
 
 import logging
-import numpy as np
 import math
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Mapping
+from typing import Optional
 from pathlib import Path
 import datasets
-import json
 import torch
-from build_dataset import buid_instruction_dataset, DataCollatorForSupervisedDataset
+from build_dataset import build_instruction_dataset, DataCollatorForSupervisedDataset
 import transformers
 from transformers import (
     CONFIG_MAPPING,
-    MODEL_FOR_CAUSAL_LM_MAPPING,
     AutoConfig,
     AutoModelForCausalLM,
     LlamaForCausalLM,
@@ -47,13 +44,12 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.testing_utils import CaptureLogger
 from transformers.trainer_utils import get_last_checkpoint
-from transformers.utils import check_min_version, send_example_telemetry
+from transformers.utils import send_example_telemetry
 from transformers.utils.versions import require_version
 
 from peft import LoraConfig, TaskType, get_peft_model, PeftModel, get_peft_model_state_dict
-
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 # 调试此程序所有的指令
 # torchrun --nnodes 1 --nproc_per_node 1 run_clm_sft_with_peft.py
@@ -104,11 +100,28 @@ DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 
-# Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.28.0.dev0")
-
-# Perform a runtime check of the dependency versions, using the exact same syntax used by pip.
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
+
+
+class SavePeftModelCallback(transformers.TrainerCallback):
+    def save_model(self, args, state, kwargs):
+        if state.best_model_checkpoint is not None:
+            checkpoint_folder = os.path.join(state.best_model_checkpoint, "sft_lora_model")
+        else:
+            checkpoint_folder = os.path.join(args.output_dir, f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}")
+
+        peft_model_path = os.path.join(checkpoint_folder, "sft_lora_model")
+        kwargs["model"].save_pretrained(peft_model_path)
+        kwargs["tokenizer"].save_pretrained(peft_model_path)
+
+    def on_save(self, args, state, control, **kwargs):
+        self.save_model(args, state, kwargs)
+        return control
+
+    def on_train_end(self, args, state, control, **kwargs):
+        peft_model_path = os.path.join(args.output_dir, "sft_lora_model")
+        kwargs["model"].save_pretrained(peft_model_path)
+        kwargs["tokenizer"].save_pretrained(peft_model_path)
 
 
 @dataclass
@@ -224,6 +237,7 @@ class DataTrainingArguments:
 
     max_seq_length: Optional[int] = field(default=512)
 
+
 @dataclass
 class MyTrainingArguments(TrainingArguments):
     trainable : Optional[str] = field(default="q_proj,v_proj")
@@ -234,7 +248,9 @@ class MyTrainingArguments(TrainingArguments):
     peft_path : Optional[str] = field(default=None)
     force_resize_embeddings: bool = field(default=False)
 
+
 logger = logging.getLogger(__name__)
+
 
 def main():
 
@@ -321,7 +337,6 @@ def main():
     # Helper function for reproducible behavior to set seed in `random`, `numpy`, `torch` and/or `tf` (if installed).
     set_seed(training_args.seed)
 
-
     config_kwargs = {
         "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
         "revision": model_args.model_revision,  # model_args.model_revision: 'main'
@@ -356,18 +371,17 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-    # len(tokenizer): 49953
-    if tokenizer.pad_token is None:  # tokenizer.pad_token: None
-        num_new_tokens = smart_tokenizer_and_embedding_resize(  # num_new_tokens: 1
-            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),  # DEFAULT_PAD_TOKEN: "[PAD]"
-            tokenizer=tokenizer,
-            model=None,)
-    # len(tokenizer): 49954
+
+    if (len(tokenizer))!=49954:
+        raise ValueError(f"The vocab size of the tokenizer must be 49954, but found {len(tokenizer)}.\n"
+                         "Please use Chinese Alpaca tokenizer!")
+    if tokenizer.pad_token is None:
+        print(f"Adding pad token {DEFAULT_PAD_TOKEN}")
+        tokenizer.add_special_tokens(dict(pad_token=DEFAULT_PAD_TOKEN))
 
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     eval_dataset=None
     train_dataset = None
-
 
     if training_args.do_train:  # training_args.do_train: True
         with training_args.main_process_first(desc="loading and tokenization"):
@@ -416,17 +430,16 @@ def main():
     if training_args.do_eval:  # training_args.do_eval: True
         with training_args.main_process_first(desc="loading and tokenization"):
             files = [data_args.validation_file]  # ['../alpaca_data.json']
-            logger.info(f"training files: {' '.join(files)}")
+            logger.info(f"Evaluation files: {' '.join(files)}")
             eval_dataset = buid_instruction_dataset(
                 data_path=files, 
-                tokenizer=tokenizer, 
+                tokenizer=tokenizer,
                 max_seq_length=data_args.max_seq_length,
-                data_cache_dir = None, 
+                data_cache_dir = None,
                 preprocessing_num_workers = data_args.preprocessing_num_workers)
         logger.info(f"Num eval_samples  {len(eval_dataset)}")
         logger.info("eval example:")
         logger.info(tokenizer.decode(eval_dataset[0]['input_ids']))
-
 
     if model_args.model_name_or_path:
         torch_dtype = (
@@ -444,7 +457,6 @@ def main():
             torch_dtype=torch_dtype,
             low_cpu_mem_usage=True
         )
-
     else:
         model = AutoModelForCausalLM.from_config(config)
         n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
@@ -479,7 +491,7 @@ def main():
             target_modules=target_modules,
             # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
             inference_mode=False, 
-            r=lora_rank, lora_alpha=lora_alpha, 
+            r=lora_rank, lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
             modules_to_save=modules_to_save)  # modules_to_save: ['embed_tokens', 'lm_head']
         # class LoraConfig(PeftConfig):
@@ -536,6 +548,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
+    trainer.add_callback(SavePeftModelCallback)
 
     # Training
     if training_args.do_train:
@@ -773,19 +786,6 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-    import shutil
-    from transformers.modeling_utils import unwrap_model
-    lora_path=os.path.join(training_args.output_dir,'sft_lora_model')
-    os.makedirs(lora_path, exist_ok=True)
-    try:
-        unwrap_model(model).peft_config.save_pretrained(lora_path)
-    except AttributeError:
-        unwrap_model(model).peft_config['default'].save_pretrained(lora_path)
-    shutil.copyfile(
-        os.path.join(training_args.output_dir,'pytorch_model.bin'),
-        os.path.join(lora_path,'adapter_model.bin'))
-    tokenizer.save_pretrained(lora_path)
-
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
@@ -801,33 +801,6 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-
-
-
-def smart_tokenizer_and_embedding_resize(
-    special_tokens_dict: Dict,  # {'pad_token': '[PAD]'}
-    tokenizer: transformers.PreTrainedTokenizer,
-    model: transformers.PreTrainedModel,  # None
-):
-    """Resize tokenizer and embedding.
-    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
-    """
-    # tokenizer.special_tokens: {'bos_token': '<s>', 'eos_token': '</s>', 'unk_token': '<unk>'}
-    num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
-    # tokenizer.special_tokens: {'bos_token': '<s>', 'eos_token': '</s>', 'unk_token': '<unk>', 'pad_token': '[PAD]'}
-    if model is not None:
-        model.resize_token_embeddings(len(tokenizer))
-
-        if num_new_tokens > 0:
-            input_embeddings = model.get_input_embeddings().weight.data
-            output_embeddings = model.get_output_embeddings().weight.data
-
-            input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-            output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-
-            input_embeddings[-num_new_tokens:] = input_embeddings_avg
-            output_embeddings[-num_new_tokens:] = output_embeddings_avg
-    return num_new_tokens
 
 if __name__ == "__main__":
     main()

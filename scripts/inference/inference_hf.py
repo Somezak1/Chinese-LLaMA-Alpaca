@@ -18,6 +18,36 @@ import torch
 from transformers import LlamaForCausalLM, LlamaTokenizer
 from peft import  PeftModel
 
+import transformers
+old_init = transformers.models.llama.modeling_llama.LlamaRotaryEmbedding.__init__
+def adaptive_ntk_init(self, dim, max_position_embeddings=2048, base=10000, device=None):
+    self.dim = dim
+    self.base = base
+    old_init(self, dim, max_position_embeddings, base, device)
+
+def adaptive_ntk_forward(self, x, seq_len=None):
+    if seq_len > self.max_seq_len_cached:
+        t = torch.arange(seq_len, device=x.device, dtype=self.inv_freq.dtype)
+        inv_freq = self.inv_freq
+        dim = self.dim
+        alpha = seq_len / 1024 - 1
+        base = self.base * alpha ** (dim / (dim-2))
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float().to(x.device) / dim ))
+
+        freqs = torch.einsum("i,j->ij", t, inv_freq)
+        emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
+        cos_cached = emb.cos()[None, None, :, :]
+        sin_cached = emb.sin()[None, None, :, :]
+        return (
+            cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+            sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype)
+        )
+    return (
+        self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+        self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype)
+    )
+transformers.models.llama.modeling_llama.LlamaRotaryEmbedding.forward = adaptive_ntk_forward
+transformers.models.llama.modeling_llama.LlamaRotaryEmbedding.__init__ = adaptive_ntk_init
 
 generation_config = dict(
     temperature=0.2,
@@ -60,7 +90,7 @@ if __name__ == '__main__':
     tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer_path)
 
     base_model = LlamaForCausalLM.from_pretrained(
-        args.base_model, 
+        args.base_model,
         load_in_8bit=False,
         torch_dtype=load_type,
         low_cpu_mem_usage=True,
@@ -116,7 +146,7 @@ if __name__ == '__main__':
                     input_text = raw_input_text
                 inputs = tokenizer(input_text,return_tensors="pt")  #add_special_tokens=False ?
                 generation_output = model.generate(
-                    input_ids = inputs["input_ids"].to(device), 
+                    input_ids = inputs["input_ids"].to(device),
                     attention_mask = inputs['attention_mask'].to(device),
                     eos_token_id=tokenizer.eos_token_id,
                     pad_token_id=tokenizer.pad_token_id,
@@ -140,7 +170,7 @@ if __name__ == '__main__':
                     input_text = example
                 inputs = tokenizer(input_text,return_tensors="pt")  #add_special_tokens=False ?
                 generation_output = model.generate(
-                    input_ids = inputs["input_ids"].to(device), 
+                    input_ids = inputs["input_ids"].to(device),
                     attention_mask = inputs['attention_mask'].to(device),
                     eos_token_id=tokenizer.eos_token_id,
                     pad_token_id=tokenizer.pad_token_id,
