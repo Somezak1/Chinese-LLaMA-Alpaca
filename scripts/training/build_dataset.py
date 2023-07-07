@@ -32,7 +32,8 @@ def build_instruction_dataset(data_path: Union[List[str],str],
             if input is not None and input !="":
                 instruction = instruction+'\n'+input
             source = prompt.format_map({'instruction':instruction})
-            target = f"{output}{tokenizer.eos_token}"  # tokenizer.eos_token: '</s>'
+            target = f"{output}{tokenizer.eos_token}"
+            # tokenizer.eos_token: '</s>'
 
             sources.append(source)
             targets.append(target)
@@ -59,9 +60,11 @@ def build_instruction_dataset(data_path: Union[List[str],str],
     if not isinstance(data_path,(list,tuple)):
         data_path = [data_path]
     for file in data_path:
+
         # file: '../data/alpaca_data_zh_51k.json'
         if data_cache_dir is None:
-            data_cache_dir = str(os.path.dirname(file))  # data_cache_dir: '../data'
+            data_cache_dir = str(os.path.dirname(file))
+            # data_cache_dir: '../data'
         cache_path = os.path.join(data_cache_dir,os.path.basename(file).split('.')[0])
         # cache_path: '../data/alpaca_data_zh_51k'
         os.makedirs(cache_path, exist_ok=True)
@@ -103,7 +106,9 @@ def build_instruction_dataset(data_path: Union[List[str],str],
                 desc="preprocessing on dataset",
             )
             processed_dataset = tokenized_dataset
-            processed_dataset.save_to_disk(cache_path)  # Saves a dataset to a dataset directory
+            processed_dataset.save_to_disk(cache_path)
+            # Saves a dataset to a dataset directory
+
             # processed_dataset:
             # DatasetDict({
             #     train: Dataset({
@@ -346,7 +351,8 @@ def build_instruction_dataset(data_path: Union[List[str],str],
             # idx: 228   token: 。   label: 30267
             # idx: 229   token: </s>   label: 2
 
-        processed_dataset.set_format('torch')  # 将input_ids和labels从List转化为torch.tensor
+        processed_dataset.set_format('torch')
+        # 将input_ids和labels从List转化为torch.tensor
         all_datasets.append(processed_dataset['train'])
     # Converts a list of Dataset with the same schema into a single Dataset
     all_datasets = concatenate_datasets(all_datasets)
@@ -369,5 +375,6 @@ class DataCollatorForSupervisedDataset(object):
         return dict(
             input_ids=input_ids,
             labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),  # 'pad_token': '[PAD]'
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            # 'pad_token': '[PAD]'
         )

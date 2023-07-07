@@ -89,7 +89,7 @@ from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 #     --modules_to_save "embed_tokens,lm_head"
 #     --lora_dropout 0.05
 #     --torch_dtype float16
-# 	--validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json
+# 	  --validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json
 #     --gradient_checkpointing
 #     --ddp_find_unused_parameters False
 
@@ -279,12 +279,15 @@ def main():
         level=logging.INFO,  # if training_args.local_rank in [-1, 0] else logging.WARN,
         handlers=[logging.StreamHandler(sys.stdout)],)
 
+
     # training_args.should_log: True
-    if training_args.should_log:  # Whether or not the current process should produce log.
+    if training_args.should_log:
+        # Whether or not the current process should produce log.
         # The default of training_args.log_level is passive, so we set log level at info here to have that default.
         transformers.utils.logging.set_verbosity_info()
 
-    log_level = training_args.get_process_log_level()  # log_level: 20, INFO
+    log_level = training_args.get_process_log_level()
+    # log_level: 20, INFO
     # get_process_log_level():
     """
     Returns the log level to be used depending on whether this process is the main process of node 0, main process
@@ -338,11 +341,16 @@ def main():
     set_seed(training_args.seed)
 
     config_kwargs = {
-        "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
-        "revision": model_args.model_revision,  # model_args.model_revision: 'main'
-        "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
-    }  # config_kwargs: key/value pairs with which to update the configuration object after loading
-    if model_args.config_name:  # model_args.config_name: None
+        "cache_dir": model_args.cache_dir,
+        # model_args.cache_dir: None
+        "revision": model_args.model_revision,
+        # model_args.model_revision: 'main'
+        "use_auth_token": True if model_args.use_auth_token else None,
+        # model_args.use_auth_token: False
+    }
+    # config_kwargs: key/value pairs with which to update the configuration object after loading
+    if model_args.config_name:
+        # model_args.config_name: None
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
         # model_args.model_name_or_path: '/data/model_weights/chinese-llama-plus-7b-official'
@@ -356,12 +364,18 @@ def main():
             logger.info(f"New config: {config}")
 
     tokenizer_kwargs = {
-        "cache_dir": model_args.cache_dir,  # model_args.cache_dir: None
-        "use_fast": model_args.use_fast_tokenizer,  # model_args.use_fast_tokenizer: True, # Indicate if transformers should try to load the fast version of the tokenizer (True) or use the Python one (False).
-        "revision": model_args.model_revision,  # model_args.model_revision: 'main'
-        "use_auth_token": True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
+        "cache_dir": model_args.cache_dir,
+        # model_args.cache_dir: None
+        "use_fast": model_args.use_fast_tokenizer,
+        # model_args.use_fast_tokenizer: True,
+        # Indicate if transformers should try to load the fast version of the tokenizer (True) or use the Python one (False).
+        "revision": model_args.model_revision,
+        # model_args.model_revision: 'main'
+        "use_auth_token": True if model_args.use_auth_token else None,
+        # model_args.use_auth_token: False
     }
-    if model_args.tokenizer_name:  # model_args.tokenizer_name: None
+    if model_args.tokenizer_name:
+        # model_args.tokenizer_name: None
         tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
     elif model_args.tokenizer_name_or_path:
         # model_args.tokenizer_name_or_path: '/data/model_weights/chinese-llama-plus-7b-official'
@@ -383,7 +397,8 @@ def main():
     eval_dataset=None
     train_dataset = None
 
-    if training_args.do_train:  # training_args.do_train: True
+    if training_args.do_train:
+        # training_args.do_train: True
         with training_args.main_process_first(desc="loading and tokenization"):
             # def main_process_first(self, local=True, desc="work"):
             #     """
@@ -406,16 +421,20 @@ def main():
             #
             #     """
 
-            path = Path(data_args.dataset_dir)  # data_args.dataset_dir: '../data'
+            path = Path(data_args.dataset_dir)
+            # data_args.dataset_dir: '../data'
             files = [os.path.join(path,file.name) for file in path.glob("*.json")]
             # files: ['../data/alpaca_data_zh_51k.json']
-            logger.info(f"training files: {' '.join(files)}")
+            logger.info(f"Training files: {' '.join(files)}")
             train_dataset = build_instruction_dataset(
                 data_path=files,
                 tokenizer=tokenizer,
-                max_seq_length=data_args.max_seq_length,  # data_args.max_seq_length: 512
+                max_seq_length=data_args.max_seq_length,
+                # data_args.max_seq_length: 512
                 data_cache_dir = None,
-                preprocessing_num_workers = data_args.preprocessing_num_workers)  # preprocessing_num_workers: 8
+                preprocessing_num_workers = data_args.preprocessing_num_workers)
+                # preprocessing_num_workers: 8
+
             # Dataset({
             #     features: ['input_ids', 'labels'],
             #     num_rows: 51179
@@ -427,9 +446,11 @@ def main():
         logger.info(f"Num train_samples  {len(train_dataset)}")
         logger.info("training example:")
         logger.info(tokenizer.decode(train_dataset[0]['input_ids']))
-    if training_args.do_eval:  # training_args.do_eval: True
+    if training_args.do_eval:
+        # training_args.do_eval: True
         with training_args.main_process_first(desc="loading and tokenization"):
-            files = [data_args.validation_file]  # ['../alpaca_data.json']
+            files = [data_args.validation_file]
+            # ['../alpaca_data.json']
             logger.info(f"Evaluation files: {' '.join(files)}")
             eval_dataset = build_instruction_dataset(
                 data_path=files,
@@ -446,14 +467,19 @@ def main():
             model_args.torch_dtype
             if model_args.torch_dtype in ["auto", None]
             else getattr(torch, model_args.torch_dtype)
-        )  # torch_dtype: torch.float16
+        )
+        # torch_dtype: torch.float16
         model = LlamaForCausalLM.from_pretrained(
             model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),  # False
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            # False
             config=config,
-            cache_dir=model_args.cache_dir,  # model_args.cache_dir: None
-            revision=model_args.model_revision,  # model_args.model_revision: 'main'
-            use_auth_token=True if model_args.use_auth_token else None,  # model_args.use_auth_token: False
+            cache_dir=model_args.cache_dir,
+            # model_args.cache_dir: None
+            revision=model_args.model_revision,
+            # model_args.model_revision: 'main'
+            use_auth_token=True if model_args.use_auth_token else None,
+            # model_args.use_auth_token: False
             torch_dtype=torch_dtype,
             low_cpu_mem_usage=True
         )
@@ -462,8 +488,10 @@ def main():
         n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
         logger.info(f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
 
-    logger.info(f"len(tokenizer):{len(tokenizer)}")  # len(tokenizer): 49954
-    embedding_size = model.get_input_embeddings().weight.shape[0]  # embedding_size: 49953
+    logger.info(f"len(tokenizer):{len(tokenizer)}")
+    # len(tokenizer): 49954
+    embedding_size = model.get_input_embeddings().weight.shape[0]
+    # embedding_size: 49953
     if len(tokenizer) != embedding_size:
         logger.info("resize the embedding size by the size of the tokenizer")
         model.resize_token_embeddings(len(tokenizer))
@@ -471,29 +499,37 @@ def main():
         # Increasing the size will add newly initialized vectors at the end.
         # Reducing the size will remove vectors from the end.
 
-    if training_args.peft_path is not None:  # training_args.peft_path: None
+    if training_args.peft_path is not None:
+        # training_args.peft_path: None
         logger.info("Peft from pre-trained model")
         model = PeftModel.from_pretrained(model, training_args.peft_path)
     else:
         logger.info("Init new peft model")
         target_modules = training_args.trainable.split(',')
         # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
-        modules_to_save = training_args.modules_to_save  # modules_to_save:  'embed_tokens,lm_head'
+        modules_to_save = training_args.modules_to_save
+        # modules_to_save:  'embed_tokens,lm_head'
         if modules_to_save is not None:
             modules_to_save = modules_to_save.split(',')
-        lora_rank = training_args.lora_rank  # lora_rank: 8
-        lora_dropout = training_args.lora_dropout  # lora_dropout: 0.05
-        lora_alpha = training_args.lora_alpha  # lora_alpha: 32.0
+        lora_rank = training_args.lora_rank
+        # lora_rank: 8
+        lora_dropout = training_args.lora_dropout
+        # lora_dropout: 0.05
+        lora_alpha = training_args.lora_alpha
+        # lora_alpha: 32.0
         logger.info(f"target_modules: {target_modules}")
         logger.info(f"lora_rank: {lora_rank}")
         peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM,  # TaskType.CAUSAL_LM: <TaskType.CAUSAL_LM: 'CAUSAL_LM'>
+            task_type=TaskType.CAUSAL_LM,
+            # TaskType.CAUSAL_LM: <TaskType.CAUSAL_LM: 'CAUSAL_LM'>
             target_modules=target_modules,
             # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
             inference_mode=False,
             r=lora_rank, lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
-            modules_to_save=modules_to_save)  # modules_to_save: ['embed_tokens', 'lm_head']
+            modules_to_save=modules_to_save)
+            # modules_to_save: ['embed_tokens', 'lm_head']
+
         # class LoraConfig(PeftConfig):
         #     """
         #     This is the configuration class to store the configuration of a [`LoraModel`].
@@ -553,9 +589,11 @@ def main():
     # Training
     if training_args.do_train:
         checkpoint = None
-        if training_args.resume_from_checkpoint is not None:  # training_args.resume_from_checkpoint: None
+        if training_args.resume_from_checkpoint is not None:
+            # training_args.resume_from_checkpoint: None
             checkpoint = training_args.resume_from_checkpoint
-        elif last_checkpoint is not None:  # last_checkpoint: None
+        elif last_checkpoint is not None:
+            # last_checkpoint: None
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
