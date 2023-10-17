@@ -435,6 +435,7 @@ def main():
                 preprocessing_num_workers = data_args.preprocessing_num_workers)
                 # preprocessing_num_workers: 8
 
+            # train_dataset:
             # Dataset({
             #     features: ['input_ids', 'labels'],
             #     num_rows: 51179
@@ -508,7 +509,7 @@ def main():
         target_modules = training_args.trainable.split(',')
         # target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'down_proj', 'up_proj']
         modules_to_save = training_args.modules_to_save
-        # modules_to_save:  'embed_tokens,lm_head'
+        # modules_to_save: 'embed_tokens,lm_head'
         if modules_to_save is not None:
             modules_to_save = modules_to_save.split(',')
         lora_rank = training_args.lora_rank

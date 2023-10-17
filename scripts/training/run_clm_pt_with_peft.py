@@ -605,7 +605,8 @@ def main():
                 # cache_dir: 'temp_data_cache_dir/pt_sample_data_text'
                 os.makedirs(cache_dir, exist_ok=True)
                 raw_dataset = load_dataset("text", data_files=data_file, cache_dir=cache_dir, keep_in_memory=False)
-                # raw_dataset: DatasetDict({
+                # raw_dataset:
+                # DatasetDict({
                 #     train: Dataset({
                 #         features: ['text'],
                 #         num_rows: 125987
@@ -634,6 +635,7 @@ def main():
                     # {'train': 'temp_data_cache_dir/pt_sample_data_text/tokenized.arrow'}
                     desc="Running tokenizer on dataset",
                 )
+                # tokenized_dataset:
                 # DatasetDict({
                 #     train: Dataset({
                 #         features: ['input_ids', 'attention_mask'],
