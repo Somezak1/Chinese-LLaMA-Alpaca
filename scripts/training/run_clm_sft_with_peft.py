@@ -56,12 +56,10 @@ from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 #     --deepspeed ds_zero2_no_offload.json \
 #     --model_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
 #     --tokenizer_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
-#     --dataset_dir ../data \
+#     --dataset_dir ../../data \
 #     --validation_split_percentage 0.001 \
 #     --per_device_train_batch_size 2 \
-#     --per_device_eval_batch_size 2 \
 #     --do_train \
-#     --do_eval \
 #     --seed 14 \
 #     --fp16 \
 #     --max_steps 100 \
@@ -89,7 +87,6 @@ from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 #     --modules_to_save "embed_tokens,lm_head" \
 #     --lora_dropout 0.05 \
 #     --torch_dtype float16 \
-# 	  --validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json \
 #     --gradient_checkpointing \
 #     --ddp_find_unused_parameters False
 
@@ -422,9 +419,9 @@ def main():
             #     """
 
             path = Path(data_args.dataset_dir)
-            # data_args.dataset_dir: '../data'
+            # data_args.dataset_dir: '../../data'
             files = [os.path.join(path,file.name) for file in path.glob("*.json")]
-            # files: ['../data/alpaca_data_zh_51k.json']
+            # files: ['../../data/alpaca_data_zh_51k.json']
             logger.info(f"Training files: {' '.join(files)}")
             train_dataset = build_instruction_dataset(
                 data_path=files,
@@ -448,10 +445,9 @@ def main():
         logger.info("training example:")
         logger.info(tokenizer.decode(train_dataset[0]['input_ids']))
     if training_args.do_eval:
-        # training_args.do_eval: True
+        # training_args.do_eval: False
         with training_args.main_process_first(desc="loading and tokenization"):
             files = [data_args.validation_file]
-            # ['../alpaca_data.json']
             logger.info(f"Evaluation files: {' '.join(files)}")
             eval_dataset = build_instruction_dataset(
                 data_path=files,
@@ -473,7 +469,7 @@ def main():
         model = LlamaForCausalLM.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            # False
+            # from_tf: False
             config=config,
             cache_dir=model_args.cache_dir,
             # model_args.cache_dir: None

@@ -61,12 +61,12 @@ def build_instruction_dataset(data_path: Union[List[str],str],
         data_path = [data_path]
     for file in data_path:
 
-        # file: '../data/alpaca_data_zh_51k.json'
+        # file: '../../data/alpaca_data_zh_51k.json'
         if data_cache_dir is None:
             data_cache_dir = str(os.path.dirname(file))
-            # data_cache_dir: '../data'
+            # data_cache_dir: '../../data'
         cache_path = os.path.join(data_cache_dir,os.path.basename(file).split('.')[0])
-        # cache_path: '../data/alpaca_data_zh_51k'
+        # cache_path: '../../data/alpaca_data_zh_51k'
         os.makedirs(cache_path, exist_ok=True)
         try:
             processed_dataset = datasets.load_from_disk(cache_path)
