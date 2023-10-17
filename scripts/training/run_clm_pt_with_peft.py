@@ -60,7 +60,7 @@ from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 
 # 该代码的运行参数为
-# python -m torch.distributed.run --nnodes 1 --nproc_per_node 1 run_clm_pt_with_peft.py
+# torchrun --nnodes 1 --nproc_per_node 1 run_clm_pt_with_peft.py
 # 	--deepspeed ds_zero2_no_offload.json \
 # 	--model_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
 # 	--tokenizer_name_or_path /data/model_weights/chinese-llama-plus-7b-official \

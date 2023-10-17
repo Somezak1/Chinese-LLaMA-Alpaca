@@ -52,45 +52,45 @@ from peft import LoraConfig, TaskType, get_peft_model, PeftModel, get_peft_model
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 # 调试此程序所有的指令
-# torchrun --nnodes 1 --nproc_per_node 1 run_clm_sft_with_peft.py
-#     --deepspeed ds_zero2_no_offload.json
-#     --model_name_or_path /data/model_weights/chinese-llama-plus-7b-official
-#     --tokenizer_name_or_path /data/model_weights/chinese-llama-plus-7b-official
-#     --dataset_dir ../data
-#     --validation_split_percentage 0.001
-#     --per_device_train_batch_size 2
-#     --per_device_eval_batch_size 2
-#     --do_train
-#     --do_eval
-#     --seed 14
-#     --fp16
-#     --max_steps 100
-#     --lr_scheduler_type cosine
-#     --learning_rate 1e-4
-#     --warmup_ratio 0.03
-#     --weight_decay 0
-#     --logging_strategy steps
-#     --logging_steps 10
-#     --save_strategy steps
-#     --save_total_limit 3
-#     --evaluation_strategy steps
-#     --eval_steps 250
-#     --save_steps 500
-#     --gradient_accumulation_steps 1
-#     --preprocessing_num_workers 8
-#     --max_seq_length 512
-#     --output_dir output
-#     --overwrite_output_dir
-#     --ddp_timeout 30000
-#     --logging_first_step True
-#     --lora_rank 8
-#     --lora_alpha 32
-#     --trainable "q_proj,v_proj,k_proj,o_proj,gate_proj,down_proj,up_proj"
-#     --modules_to_save "embed_tokens,lm_head"
-#     --lora_dropout 0.05
-#     --torch_dtype float16
-# 	  --validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json
-#     --gradient_checkpointing
+# torchrun --nnodes 1 --nproc_per_node 1 run_clm_sft_with_peft.py \
+#     --deepspeed ds_zero2_no_offload.json \
+#     --model_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
+#     --tokenizer_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
+#     --dataset_dir ../data \
+#     --validation_split_percentage 0.001 \
+#     --per_device_train_batch_size 2 \
+#     --per_device_eval_batch_size 2 \
+#     --do_train \
+#     --do_eval \
+#     --seed 14 \
+#     --fp16 \
+#     --max_steps 100 \
+#     --lr_scheduler_type cosine \
+#     --learning_rate 1e-4 \
+#     --warmup_ratio 0.03 \
+#     --weight_decay 0 \
+#     --logging_strategy steps \
+#     --logging_steps 10 \
+#     --save_strategy steps \
+#     --save_total_limit 3 \
+#     --evaluation_strategy steps \
+#     --eval_steps 250 \
+#     --save_steps 500 \
+#     --gradient_accumulation_steps 1 \
+#     --preprocessing_num_workers 8 \
+#     --max_seq_length 512 \
+#     --output_dir output \
+#     --overwrite_output_dir \
+#     --ddp_timeout 30000 \
+#     --logging_first_step True \
+#     --lora_rank 8 \
+#     --lora_alpha 32 \
+#     --trainable "q_proj,v_proj,k_proj,o_proj,gate_proj,down_proj,up_proj" \
+#     --modules_to_save "embed_tokens,lm_head" \
+#     --lora_dropout 0.05 \
+#     --torch_dtype float16 \
+# 	  --validation_file /data/csw/stanford_alpaca/alpaca_data_clip.json \
+#     --gradient_checkpointing \
 #     --ddp_find_unused_parameters False
 
 
