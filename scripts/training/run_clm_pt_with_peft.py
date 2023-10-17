@@ -59,7 +59,7 @@ from peft import LoraConfig, TaskType, get_peft_model, PeftModel, get_peft_model
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 
-# 该代码的运行参数为
+# 此代码的注释都是基于如下运行指令debug获得的
 # torchrun --nnodes 1 --nproc_per_node 1 run_clm_pt_with_peft.py
 # 	--deepspeed ds_zero2_no_offload.json \
 # 	--model_name_or_path /data/model_weights/chinese-llama-plus-7b-official \
